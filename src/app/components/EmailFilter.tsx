@@ -1,51 +1,81 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { google } from "googleapis";
+"use client";
+
+import { useState, useEffect } from "react";
+import { Input } from "@/components/ui/input";
 
 interface Email {
   id: string;
   snippet: string;
+  from: string;
+  subject: string;
+  date: string;
 }
 
-export default async function EmailList({
-  emails,
-  accessToken,
-}: {
-  emails: { id: string }[];
-  accessToken: string;
-}) {
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: accessToken });
-  const gmail = google.gmail({ version: "v1", auth });
+export default function EmailList() {
+  const [emailDetails, setEmailDetails] = useState<Email[]>([]);
+  const [filter, setFilter] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
-  try {
-    const emailDetails = await Promise.all(
-      emails.map(async (email) => {
-        const response = await gmail.users.messages.get({
-          userId: "me",
-          id: email.id,
-        });
-        return {
-          id: email.id,
-          snippet: response.data.snippet,
-        };
-      })
-    );
+  useEffect(() => {
+    const fetchEmails = async () => {
+      try {
+        const response = await fetch("/api/emails");
+        if (!response.ok) throw new Error("Failed to fetch");
+        const data = await response.json();
+        setEmailDetails(data);
+      } catch (error) {
+        console.error("Error fetching emails:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    return (
+    fetchEmails();
+  }, []);
+
+  const filteredEmails = emailDetails.filter((email) =>
+    email.from.toLowerCase().includes(filter.toLowerCase())
+  );
+
+  if (isLoading) {
+    return <p>Chargement des e-mails...</p>;
+  }
+
+  return (
+    <div className="w-full max-w-4xl">
+      <div className="mb-4">
+        <Input
+          type="text"
+          placeholder="Filtrer par expéditeur"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="w-full"
+        />
+      </div>
       <ul className="space-y-4">
-        {emailDetails.map((email: any) => (
-          <li key={email.id} className="border p-4 rounded-lg">
-            <p>{email.snippet}</p>
+        {filteredEmails.map((email) => (
+          <li
+            key={email.id}
+            className="border p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <p className="font-semibold">{email.from}</p>
+                <p className="text-sm text-gray-600">{email.subject}</p>
+              </div>
+              <p className="text-xs text-gray-500">
+                {new Date(email.date).toLocaleString()}
+              </p>
+            </div>
+            <p className="text-sm text-gray-700">{email.snippet}</p>
           </li>
         ))}
       </ul>
-    );
-  } catch (error) {
-    console.error("Error fetching email details:", error);
-    return (
-      <p>
-        An error occurred while fetching email details. Please try again later.
-      </p>
-    );
-  }
+      {filteredEmails.length === 0 && (
+        <p className="text-center text-gray-500 mt-4">
+          Aucun e-mail trouvé pour ce filtre.
+        </p>
+      )}
+    </div>
+  );
 }
